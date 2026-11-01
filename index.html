@@ -778,6 +778,16 @@
       }
 
       async function ejecutarAnalisis() {
+        if (!usandoCamara && !imagenFuente) {
+          document.getElementById("resultado").innerHTML = `<span class="text-muted fs-4">En espera...</span>`;
+          document.getElementById("confianza-texto").innerText = "Activa la cámara o sube una foto para comenzar";
+          document.getElementById("stat-gatos").innerText = "0";
+          document.getElementById("stat-perros").innerText = "0";
+          document.getElementById("stat-total").innerText = "0";
+          document.getElementById("lista-detecciones").innerHTML = `<div class="text-muted small text-center py-2">Sin imagen cargada</div>`;
+          return;
+        }
+
         if (procesandoCuadro) return;
         procesandoCuadro = true;
 
