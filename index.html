@@ -252,20 +252,25 @@
         background: #ffffff;
         padding: 16px;
         border-radius: 16px;
-        display: inline-flex;
+        display: flex;
         align-items: center;
         justify-content: center;
         box-shadow: 0 10px 25px rgba(0,0,0,0.3);
         width: 232px;
         height: 232px;
         margin: 0 auto;
+        overflow: hidden;
       }
-      #qr-container canvas, #qr-container img {
+      /* qrcodejs crea un canvas y un img. Ocultamos el canvas para evitar que aparezcan 2 QRs desbordados */
+      #qr-container canvas {
+        display: none !important;
+      }
+      #qr-container img {
         width: 200px !important;
         height: 200px !important;
         display: block !important;
-        object-fit: contain !important;
         margin: 0 auto !important;
+        object-fit: contain !important;
       }
     </style>
   </head>
@@ -336,6 +341,17 @@
         <div class="col-12 col-lg-7">
           <div class="glass-card p-3 p-md-4 text-center">
             
+            <!-- Banner sugerencia para celular si entra directo -->
+            <div class="d-block d-md-none alert alert-dark border border-primary border-opacity-50 py-2 px-3 small text-start mb-3">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <i class="bi bi-broadcast text-info"></i> <strong class="text-white">¿Transmitir a tu Laptop?</strong>
+                  <div class="text-muted" style="font-size:0.75rem;">Usa este celular como cámara remota en vivo</div>
+                </div>
+                <button class="btn btn-sm btn-primary fw-bold px-3" onclick="abrirModalCelular()">Vincular</button>
+              </div>
+            </div>
+
             <!-- Selector de Modos -->
             <div class="mode-toggle mb-3">
               <input type="radio" class="btn-check" name="modoOperacion" id="modoConteo" autocomplete="off" checked onchange="cambiarModo('conteo')">
@@ -494,21 +510,39 @@
             <h5 class="modal-title fw-bold w-100">Vincular Celular como Cámara</h5>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <div class="modal-body py-4">
+          <div class="modal-body py-3">
             <p class="text-muted small mb-3">
-              Escanea este código con la cámara de tu celular. El teléfono transmitirá su video en vivo hacia esta laptop vía WebRTC.
+              Escanea este código con la cámara de tu celular para transmitir video inalámbrico hacia esta laptop vía WebRTC.
             </p>
             
+            <!-- Contenedor del Código QR nítido -->
             <div id="qr-container" class="mb-3"></div>
 
-            <div class="input-group input-group-sm mb-2">
+            <!-- Código corto de vinculación rápida -->
+            <div class="mb-3 p-2 rounded bg-dark border border-secondary border-opacity-25">
+              <div class="small text-muted mb-1">O escribe este código en tu celular:</div>
+              <span id="codigo-sala-badge" class="badge bg-primary fs-5 px-3 py-1 font-monospace tracking-wide">------</span>
+            </div>
+
+            <!-- Enlace directo para copiar o compartir -->
+            <div class="input-group input-group-sm mb-3">
               <input type="text" id="link-remoto" class="form-control bg-dark text-light border-secondary font-monospace" readonly>
-              <button class="btn btn-outline-primary" onclick="copiarLinkRemoto()"><i class="bi bi-clipboard"></i> Copiar</button>
+              <button class="btn btn-primary" onclick="copiarLinkRemoto()"><i class="bi bi-clipboard"></i> Copiar</button>
             </div>
             
-            <div id="estado-conexion-peer" class="badge bg-secondary py-2 px-3 rounded-pill mt-2">
+            <div id="estado-conexion-peer" class="badge bg-secondary py-2 px-3 rounded-pill">
               <i class="bi bi-broadcast"></i> Esperando conexión del celular...
             </div>
+
+            <!-- Sección alternativa si se abrió desde el celular -->
+            <div class="border-top border-secondary border-opacity-25 pt-3 mt-3 text-start">
+              <div class="small fw-bold text-light mb-1"><i class="bi bi-phone"></i> ¿Estás en el celular y quieres vincularte a tu laptop?</div>
+              <div class="input-group input-group-sm">
+                <input type="text" id="input-codigo-laptop" class="form-control bg-dark text-light border-secondary text-uppercase font-monospace" placeholder="Código de la laptop">
+                <button class="btn btn-outline-info" onclick="conectarPorCodigoManual()">Conectar</button>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -665,11 +699,17 @@
 
         document.getElementById("link-remoto").value = targetUrl;
 
+        // Actualizar badge con código legible (ej: A8F3B)
+        const shortCode = peerIdLocal ? peerIdLocal.replace('laptop-', '').toUpperCase() : '------';
+        const badgeEl = document.getElementById("codigo-sala-badge");
+        if (badgeEl) badgeEl.innerText = shortCode;
+
+        // Generar QR con máximo contraste (negro puro sobre fondo blanco)
         new QRCode(qrContainer, {
           text: targetUrl,
           width: 200,
           height: 200,
-          colorDark: "#0f172a",
+          colorDark: "#000000",
           colorLight: "#ffffff",
           correctLevel: QRCode.CorrectLevel.M
         });
@@ -680,8 +720,29 @@
       function copiarLinkRemoto() {
         const input = document.getElementById("link-remoto");
         input.select();
-        document.execCommand("copy");
-        alert("Enlace copiado al portapapeles!");
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(input.value)
+            .then(() => alert("¡Enlace copiado! Puedes pegarlo o enviártelo por WhatsApp."))
+            .catch(() => {
+              document.execCommand("copy");
+              alert("¡Enlace copiado al portapapeles!");
+            });
+        } else {
+          document.execCommand("copy");
+          alert("¡Enlace copiado al portapapeles!");
+        }
+      }
+
+      function conectarPorCodigoManual() {
+        let codigo = document.getElementById("input-codigo-laptop").value.trim().toLowerCase();
+        if (!codigo) {
+          alert("Por favor escribe el código de la laptop (ej: " + (peerIdLocal ? peerIdLocal.replace('laptop-','') : 'abc123') + ").");
+          return;
+        }
+        if (!codigo.startsWith("laptop-")) {
+          codigo = "laptop-" + codigo;
+        }
+        window.location.href = window.location.origin + window.location.pathname + "?remoto=" + encodeURIComponent(codigo);
       }
 
       // --- MODO TRANSMISOR EN CELULAR ---
