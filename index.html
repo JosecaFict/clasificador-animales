@@ -341,14 +341,18 @@
         <div class="col-12 col-lg-7">
           <div class="glass-card p-3 p-md-4 text-center">
             
-            <!-- Banner sugerencia para celular si entra directo -->
-            <div class="d-block d-md-none alert alert-dark border border-primary border-opacity-50 py-2 px-3 small text-start mb-3">
-              <div class="d-flex justify-content-between align-items-center">
-                <div>
-                  <i class="bi bi-broadcast text-info"></i> <strong class="text-white">¿Transmitir a tu Laptop?</strong>
-                  <div class="text-muted" style="font-size:0.75rem;">Usa este celular como cámara remota en vivo</div>
-                </div>
-                <button class="btn btn-sm btn-primary fw-bold px-3" onclick="abrirModalVincularMobile()">Vincular</button>
+            <!-- Vinculación directa para Celular (Visible solo en pantallas móviles) -->
+            <div class="d-block d-md-none p-3 rounded-3 mb-3 text-start shadow" style="background: rgba(13, 110, 253, 0.15); border: 1px solid rgba(13, 110, 253, 0.5);">
+              <div class="d-flex align-items-center gap-2 mb-1 text-info">
+                <i class="bi bi-broadcast fs-5"></i>
+                <strong class="text-white">Transmitir Cámara a tu Laptop</strong>
+              </div>
+              <p class="text-muted small mb-2">Escribe el código que aparece en tu laptop para conectarte en 1 toque:</p>
+              <div class="input-group input-group-lg">
+                <input type="text" id="codigo-directo-mobile" class="form-control text-center font-monospace fw-bold text-uppercase fs-2 bg-dark text-warning border-primary" placeholder="EJ: 2R6LZH" maxlength="10" autocomplete="off" autocapitalize="characters" onkeydown="if(event.key==='Enter'){event.preventDefault();vincularCelularDirecto();}">
+                <button class="btn btn-primary px-4 fw-bold" type="button" onclick="vincularCelularDirecto()">
+                  <i class="bi bi-camera-video-fill me-1"></i> Conectar
+                </button>
               </div>
             </div>
 
@@ -560,12 +564,10 @@
             <p class="text-muted small mb-3">
               Escribe el código que aparece en la pantalla de tu laptop:
             </p>
-            <form onsubmit="event.preventDefault(); conectarPorCodigoMobile();">
-              <div class="input-group input-group-lg mb-3">
-                <input type="text" id="input-codigo-mobile" class="form-control text-center font-monospace fw-bold text-uppercase fs-2 bg-dark text-warning border-primary" placeholder="EJ: S9FZRK" maxlength="12" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
-                <button class="btn btn-primary px-4 fw-bold" type="submit"><i class="bi bi-arrow-right-circle-fill fs-4"></i></button>
-              </div>
-            </form>
+            <div class="input-group input-group-lg mb-3">
+              <input type="text" id="input-codigo-mobile" class="form-control text-center font-monospace fw-bold text-uppercase fs-2 bg-dark text-warning border-primary" placeholder="EJ: 2R6LZH" maxlength="12" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();vincularCelularDirecto();}">
+              <button class="btn btn-primary px-4 fw-bold" type="button" onclick="vincularCelularDirecto()"><i class="bi bi-arrow-right-circle-fill fs-4"></i></button>
+            </div>
             <p class="text-muted mb-0" style="font-size:0.75rem;">
               Al conectar, este teléfono transmitirá su cámara a la laptop en tiempo real.
             </p>
@@ -760,6 +762,55 @@
         }
       }
 
+      function cerrarTodosLosModales() {
+        document.querySelectorAll('.modal').forEach(m => {
+          m.classList.remove('show');
+          m.style.setProperty('display', 'none', 'important');
+          m.setAttribute('aria-hidden', 'true');
+        });
+        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+      }
+
+      async function vincularCelularDirecto() {
+        let inputDirecto = document.getElementById("codigo-directo-mobile");
+        let inputModal = document.getElementById("input-codigo-mobile");
+        let inputLaptop = document.getElementById("input-codigo-laptop");
+
+        let val = "";
+        if (inputDirecto && inputDirecto.value && inputDirecto.value.trim()) {
+          val = inputDirecto.value.trim();
+        } else if (inputModal && inputModal.value && inputModal.value.trim()) {
+          val = inputModal.value.trim();
+        } else if (inputLaptop && inputLaptop.value && inputLaptop.value.trim()) {
+          val = inputLaptop.value.trim();
+        }
+
+        let codigo = val.toLowerCase();
+        if (!codigo) {
+          alert("Por favor escribe el código de la laptop (ej: 2R6LZH).");
+          return;
+        }
+        if (!codigo.startsWith("laptop-")) {
+          codigo = "laptop-" + codigo;
+        }
+
+        // 1. Ocultar todos los modales inmediatamente
+        cerrarTodosLosModales();
+
+        // 2. Guardar en historial
+        try {
+          history.pushState({}, '', '?remoto=' + encodeURIComponent(codigo));
+        } catch(e) {}
+
+        // 3. Pasar a vista de transmisión
+        prepararTransmisorCelular(codigo);
+
+        // 4. Iniciar cámara de inmediato dentro del mismo toque de usuario
+        await concederPermisoYTransmitir();
+      }
+
       function abrirModalVincularMobile() {
         const modal = new bootstrap.Modal(document.getElementById('modalVincularMobile'));
         modal.show();
@@ -769,62 +820,26 @@
         }, 300);
       }
 
-      function conectarPorCodigoMobile() {
-        let inputEl = document.getElementById("input-codigo-mobile");
-        let codigo = inputEl ? inputEl.value.trim().toLowerCase() : "";
-        if (!codigo) {
-          alert("Por favor ingresa el código de tu laptop (ej: S9FZRK).");
-          return;
-        }
-        if (!codigo.startsWith("laptop-")) {
-          codigo = "laptop-" + codigo;
-        }
-        try {
-          history.pushState({}, '', '?remoto=' + encodeURIComponent(codigo));
-        } catch(e) {}
-        prepararTransmisorCelular(codigo);
-      }
-
-      function conectarPorCodigoManual() {
-        let inputEl = document.getElementById("input-codigo-laptop");
-        let codigo = inputEl ? inputEl.value.trim().toLowerCase() : "";
-        if (!codigo) {
-          alert("Por favor escribe el código de la laptop.");
-          return;
-        }
-        if (!codigo.startsWith("laptop-")) {
-          codigo = "laptop-" + codigo;
-        }
-        try {
-          history.pushState({}, '', '?remoto=' + encodeURIComponent(codigo));
-        } catch(e) {}
-        prepararTransmisorCelular(codigo);
-      }
+      function conectarPorCodigoMobile() { vincularCelularDirecto(); }
+      function conectarPorCodigoManual() { vincularCelularDirecto(); }
 
       // --- MODO TRANSMISOR EN CELULAR ---
       let peerRemotoObjetivo = null;
 
       function prepararTransmisorCelular(targetPeerId) {
         peerRemotoObjetivo = targetPeerId;
+        cerrarTodosLosModales();
 
-        // Limpiar cualquier modal o backdrop abierto
-        document.querySelectorAll('.modal').forEach(m => {
-          try {
-            const inst = bootstrap.Modal.getInstance(m);
-            if (inst) inst.hide();
-          } catch(e) {}
-        });
-        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-        document.body.classList.remove('modal-open');
+        // Mostrar vista limpia de transmisión a pantalla completa
+        const pantallaT = document.getElementById("pantalla-transmisor");
+        if (pantallaT) pantallaT.style.setProperty('display', 'flex', 'important');
 
-        // Mostrar vista limpia de transmisión
-        document.getElementById("pantalla-transmisor").style.display = "flex";
         const main = document.querySelector("main");
-        if (main) main.style.display = "none";
+        if (main) main.style.setProperty('display', 'none', 'important');
         const header = document.querySelector("header");
-        if (header) header.style.display = "none";
+        if (header) header.style.setProperty('display', 'none', 'important');
         const footer = document.querySelector("footer");
-        if (footer) footer.style.display = "none";
+        if (footer) footer.style.setProperty('display', 'none', 'important');
       }
 
       async function concederPermisoYTransmitir() {
