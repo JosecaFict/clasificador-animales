@@ -517,6 +517,8 @@
       let peer = null;
       let peerIdLocal = null;
       let llamadaActiva = null;
+      let streamTransmisor = null;
+      let facingTransmisor = "environment";
 
       // FPS tracking
       let lastFrameTime = performance.now();
@@ -657,9 +659,6 @@
       }
 
       // --- MODO TRANSMISOR EN CELULAR ---
-      let streamTransmisor = null;
-      let facingTransmisor = "environment";
-
       async function iniciarTransmisorCelular(targetPeerId) {
         document.getElementById("pantalla-transmisor").style.display = "flex";
         document.querySelector("main").style.display = "none";
@@ -668,19 +667,29 @@
         const videoT = document.getElementById("video-transmisor");
 
         try {
-          streamTransmisor = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: { facingMode: facingTransmisor, width: { ideal: 640 }, height: { ideal: 640 } }
-          });
-          videoT.srcObject = streamTransmisor;
-          videoT.play();
+          // Intentar cámara trasera con fallback para iPhone/Android
+          let opcionesVideo = { facingMode: { ideal: facingTransmisor }, width: { ideal: 640 } };
+          try {
+            streamTransmisor = await navigator.mediaDevices.getUserMedia({ audio: false, video: opcionesVideo });
+          } catch(e1) {
+            console.log("Fallback a video básico:", e1);
+            streamTransmisor = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+          }
 
-          // Conectar con la laptop
+          videoT.srcObject = streamTransmisor;
+          videoT.onloadedmetadata = () => videoT.play();
+          videoT.play().catch(e => console.log(e));
+
+          // Conectar con la laptop por WebRTC
           const celPeer = new Peer();
           celPeer.on('open', () => {
             console.log("Celular conectado como Peer, llamando a laptop:", targetPeerId);
             const call = celPeer.call(targetPeerId, streamTransmisor);
             call.on('close', () => alert("Conexión finalizada"));
+          });
+
+          celPeer.on('error', err => {
+            console.warn("PeerJS error en celular:", err);
           });
 
         } catch(err) {
@@ -694,12 +703,18 @@
         }
         facingTransmisor = (facingTransmisor === "environment") ? "user" : "environment";
         const videoT = document.getElementById("video-transmisor");
-        streamTransmisor = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: facingTransmisor, width: { ideal: 640 } }
-        });
-        videoT.srcObject = streamTransmisor;
-        videoT.play();
+
+        try {
+          streamTransmisor = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: { ideal: facingTransmisor }, width: { ideal: 640 } }
+          });
+          videoT.srcObject = streamTransmisor;
+          videoT.onloadedmetadata = () => videoT.play();
+          videoT.play().catch(e => console.log(e));
+        } catch(e) {
+          console.warn("Error alternando cámara:", e);
+        }
       }
 
       function desconectarTransmisor() {
