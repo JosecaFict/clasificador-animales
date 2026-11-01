@@ -252,12 +252,20 @@
         background: #ffffff;
         padding: 16px;
         border-radius: 16px;
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        width: 232px;
+        height: 232px;
+        margin: 0 auto;
       }
       #qr-container canvas, #qr-container img {
+        width: 200px !important;
+        height: 200px !important;
         display: block !important;
-        margin: 0 auto;
+        object-fit: contain !important;
+        margin: 0 auto !important;
       }
     </style>
   </head>
@@ -265,17 +273,35 @@
 
     <!-- Vista Especial: Celular como Transmisor Remoto WebRTC -->
     <div id="pantalla-transmisor">
-      <video id="video-transmisor" playsinline autoplay muted></video>
-      <div class="transmisor-bar">
-        <div class="d-flex align-items-center gap-2">
-          <span class="pulse-dot"></span>
-          <span class="fw-bold small">Transmitiendo a Laptop</span>
+      <!-- 1. Pantalla de activación táctil para Safari / iOS / Android -->
+      <div id="iniciar-camara-celular-view" class="d-flex flex-column align-items-center justify-content-center p-4 text-center w-100 h-100" style="background:#0b0f19;">
+        <div class="mb-4">
+          <span class="pulse-dot" style="width: 20px; height: 20px; display: inline-block;"></span>
         </div>
-        <button class="btn btn-sm btn-outline-light" onclick="cambiarCamaraTransmisor()"><i class="bi bi-camera-reverse"></i> Cambiar</button>
+        <h4 class="fw-bold text-white mb-2">Cámara Remota WebRTC</h4>
+        <p class="text-muted small mb-4" style="max-width: 320px;">
+          Toca el botón para activar la cámara de tu celular y comenzar a transmitir video en vivo hacia la laptop en tiempo real.
+        </p>
+        <button class="btn btn-primary btn-lg rounded-pill px-5 py-3 fw-bold shadow-lg mb-3" onclick="concederPermisoYTransmitir()">
+          <i class="bi bi-camera-video-fill me-2"></i> Encender Cámara
+        </button>
+        <div id="error-camara-msg" class="alert alert-danger py-2 px-3 small d-none text-start" style="max-width: 340px;"></div>
       </div>
-      <div class="transmisor-footer">
-        <p class="small text-muted mb-2">Apunta la cámara a los animales. La laptop procesa y cuenta en tiempo real.</p>
-        <button class="btn btn-danger btn-sm px-3" onclick="desconectarTransmisor()"><i class="bi bi-x-circle"></i> Finalizar Transmisión</button>
+
+      <!-- 2. Visor de video activo una vez activada la cámara -->
+      <div id="video-activo-view" style="display:none; width:100%; height:100%; position:relative;">
+        <video id="video-transmisor" playsinline autoplay muted></video>
+        <div class="transmisor-bar">
+          <div class="d-flex align-items-center gap-2">
+            <span class="pulse-dot"></span>
+            <span class="fw-bold small">Transmitiendo a Laptop</span>
+          </div>
+          <button class="btn btn-sm btn-outline-light" onclick="cambiarCamaraTransmisor()"><i class="bi bi-camera-reverse"></i> Cambiar</button>
+        </div>
+        <div class="transmisor-footer">
+          <p class="small text-muted mb-2">Apunta la cámara a los animales. La laptop procesa y cuenta en tiempo real.</p>
+          <button class="btn btn-danger btn-sm px-3" onclick="desconectarTransmisor()"><i class="bi bi-x-circle"></i> Finalizar Transmisión</button>
+        </div>
       </div>
     </div>
 
@@ -538,8 +564,8 @@
       const remotePeerId = urlParams.get('remoto');
 
       if (remotePeerId) {
-        // Ejecutar en modo celular transmisor
-        iniciarTransmisorCelular(remotePeerId);
+        // Ejecutar en modo celular transmisor con activación táctil
+        prepararTransmisorCelular(remotePeerId);
       } else {
         // Ejecutar en modo Monitor / Aplicación principal
         iniciarAppPrincipal();
@@ -641,8 +667,8 @@
 
         new QRCode(qrContainer, {
           text: targetUrl,
-          width: 190,
-          height: 190,
+          width: 200,
+          height: 200,
           colorDark: "#0f172a",
           colorLight: "#ffffff",
           correctLevel: QRCode.CorrectLevel.M
@@ -659,20 +685,33 @@
       }
 
       // --- MODO TRANSMISOR EN CELULAR ---
-      async function iniciarTransmisorCelular(targetPeerId) {
+      let peerRemotoObjetivo = null;
+
+      function prepararTransmisorCelular(targetPeerId) {
+        peerRemotoObjetivo = targetPeerId;
         document.getElementById("pantalla-transmisor").style.display = "flex";
         document.querySelector("main").style.display = "none";
         document.querySelector("header").style.display = "none";
+        const footer = document.querySelector("footer");
+        if (footer) footer.style.display = "none";
+      }
 
+      async function concederPermisoYTransmitir() {
+        const errorMsg = document.getElementById("error-camara-msg");
+        errorMsg.classList.add("d-none");
         const videoT = document.getElementById("video-transmisor");
 
         try {
-          // Intentar cámara trasera con fallback para iPhone/Android
-          let opcionesVideo = { facingMode: { ideal: facingTransmisor }, width: { ideal: 640 } };
+          // Solicitud de cámara activada por toque directo del usuario (estándar Safari/iOS)
+          let opcionesVideo = {
+            facingMode: { ideal: facingTransmisor },
+            width: { ideal: 640 }
+          };
+
           try {
             streamTransmisor = await navigator.mediaDevices.getUserMedia({ audio: false, video: opcionesVideo });
           } catch(e1) {
-            console.log("Fallback a video básico:", e1);
+            console.log("Fallback a cámara genérica:", e1);
             streamTransmisor = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
           }
 
@@ -680,12 +719,16 @@
           videoT.onloadedmetadata = () => videoT.play();
           videoT.play().catch(e => console.log(e));
 
-          // Conectar con la laptop por WebRTC
+          // Ocultar pantalla previa y mostrar video activo
+          document.getElementById("iniciar-camara-celular-view").style.display = "none";
+          document.getElementById("video-activo-view").style.display = "block";
+
+          // Conectar por WebRTC con la laptop
           const celPeer = new Peer();
           celPeer.on('open', () => {
-            console.log("Celular conectado como Peer, llamando a laptop:", targetPeerId);
-            const call = celPeer.call(targetPeerId, streamTransmisor);
-            call.on('close', () => alert("Conexión finalizada"));
+            console.log("Celular conectado como Peer, llamando a laptop:", peerRemotoObjetivo);
+            const call = celPeer.call(peerRemotoObjetivo, streamTransmisor);
+            call.on('close', () => alert("Transmisión finalizada"));
           });
 
           celPeer.on('error', err => {
@@ -693,7 +736,10 @@
           });
 
         } catch(err) {
-          alert("Error al abrir cámara en el celular: " + err.message);
+          console.error("Error getUserMedia:", err);
+          errorMsg.innerHTML = "<strong>Error al abrir cámara:</strong> " + err.message + 
+            "<br><br><span style='font-size:0.75rem;'>En Safari de iPhone: Toca el icono <strong>'aA'</strong> en la barra superior &gt; <strong>Configuración del sitio web</strong> &gt; <strong>Cámara</strong> &gt; Selecciona <strong>'Permitir'</strong>, y luego vuelve a tocar el botón.</span>";
+          errorMsg.classList.remove("d-none");
         }
       }
 
