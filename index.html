@@ -1,0 +1,1027 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <title>IA Vision Studio · Clasificador y Detector de Animales</title>
+
+    <!-- Google Fonts & Bootstrap 5 & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <style>
+      :root {
+        --primary: #2563eb;
+        --primary-glow: rgba(37, 99, 235, 0.35);
+        --accent-cat: #0ea5e9;
+        --accent-dog: #10b981;
+        --bg-body: #0b0f19;
+        --surface-card: #131b2e;
+        --surface-card-hover: #17223b;
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        --text-muted: #94a3b8;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        background-color: var(--bg-body);
+        color: #f8fafc;
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        min-height: 100vh;
+        background-image: 
+          radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.15) 0px, transparent 50%),
+          radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.12) 0px, transparent 50%);
+        background-attachment: fixed;
+      }
+
+      /* Navbar */
+      .app-header {
+        background: rgba(19, 27, 46, 0.75);
+        backdrop-filter: blur(16px);
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      /* Cards & Glassmorphism */
+      .glass-card {
+        background: rgba(19, 27, 46, 0.85);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border-subtle);
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+        transition: transform 0.2s ease, border-color 0.2s ease;
+      }
+
+      .glass-card:hover {
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+
+      /* Viewport / Canvas */
+      .viewport-wrapper {
+        position: relative;
+        border-radius: 18px;
+        overflow: hidden;
+        background: #000;
+        box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        display: inline-block;
+        max-width: 100%;
+      }
+
+      #canvas {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+
+      /* Camera HUD Reticle */
+      .hud-overlay {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none;
+      }
+      .hud-corner {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(56, 189, 248, 0.6);
+      }
+      .hud-tl { top: 12px; left: 12px; border-right: none; border-bottom: none; }
+      .hud-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; }
+      .hud-bl { bottom: 12px; left: 12px; border-right: none; border-top: none; }
+      .hud-br { bottom: 12px; right: 12px; border-left: none; border-top: none; }
+
+      .hud-live-tag {
+        position: absolute;
+        top: 14px;
+        left: 16px;
+        background: rgba(15, 23, 42, 0.75);
+        backdrop-filter: blur(8px);
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .pulse-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #10b981;
+        animation: pulse 1.5s infinite;
+      }
+
+      @keyframes pulse {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      }
+
+      /* Segmented Mode Control */
+      .mode-toggle {
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid var(--border-subtle);
+        border-radius: 14px;
+        padding: 4px;
+        display: flex;
+        gap: 4px;
+      }
+      .mode-toggle .btn {
+        flex: 1;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.88rem;
+        padding: 8px 14px;
+        border: none;
+        color: var(--text-muted);
+        transition: all 0.25s ease;
+      }
+      .mode-toggle input[type="radio"]:checked + .btn {
+        background: var(--primary);
+        color: #ffffff;
+        box-shadow: 0 4px 15px var(--primary-glow);
+      }
+
+      /* Stats pill badges */
+      .stat-badge {
+        background: rgba(15, 23, 42, 0.65);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        min-width: 90px;
+      }
+      .stat-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.6rem;
+        font-weight: 800;
+        line-height: 1;
+        margin-bottom: 4px;
+      }
+      .stat-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      /* Big Result Display */
+      .hero-result {
+        min-height: 80px;
+        font-size: 2.7rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      }
+
+      /* Action Buttons */
+      .btn-action {
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 0.88rem;
+        padding: 8px 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+      }
+      .btn-action:hover {
+        transform: translateY(-1px);
+      }
+
+      /* Remote Transmitter Screen (Phone) */
+      #pantalla-transmisor {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100vw; height: 100vh;
+        background: #000;
+        z-index: 9999;
+        flex-direction: column;
+      }
+      #video-transmisor {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .transmisor-bar {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+        padding: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: white;
+      }
+      .transmisor-footer {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+        padding: 24px 16px;
+        text-align: center;
+      }
+
+      /* Modal QR */
+      .modal-content {
+        background: var(--surface-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 20px;
+        color: #f8fafc;
+      }
+      .modal-header, .modal-footer {
+        border-color: var(--border-subtle);
+      }
+      #qr-container {
+        background: #ffffff;
+        padding: 16px;
+        border-radius: 16px;
+        display: inline-block;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      }
+      #qr-container canvas, #qr-container img {
+        display: block !important;
+        margin: 0 auto;
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- Vista Especial: Celular como Transmisor Remoto WebRTC -->
+    <div id="pantalla-transmisor">
+      <video id="video-transmisor" playsinline autoplay muted></video>
+      <div class="transmisor-bar">
+        <div class="d-flex align-items-center gap-2">
+          <span class="pulse-dot"></span>
+          <span class="fw-bold small">Transmitiendo a Laptop</span>
+        </div>
+        <button class="btn btn-sm btn-outline-light" onclick="cambiarCamaraTransmisor()"><i class="bi bi-camera-reverse"></i> Cambiar</button>
+      </div>
+      <div class="transmisor-footer">
+        <p class="small text-muted mb-2">Apunta la cámara a los animales. La laptop procesa y cuenta en tiempo real.</p>
+        <button class="btn btn-danger btn-sm px-3" onclick="desconectarTransmisor()"><i class="bi bi-x-circle"></i> Finalizar Transmisión</button>
+      </div>
+    </div>
+
+    <!-- Interfaz Principal (Laptop / PC / Celular Autónomo) -->
+    <header class="app-header py-3 mb-4 sticky-top">
+      <div class="container d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <img src="logo_uagrm_ficct.png" alt="FICCT UAGRM" width="46" height="58" class="shadow-sm">
+          <div>
+            <h5 class="mb-0 fw-bold tracking-tight d-flex align-items-center gap-2">
+              Vision Studio <span class="badge bg-primary text-white rounded-pill px-2 py-1" style="font-size:0.65rem;">FICCT · UAGRM</span>
+            </h5>
+            <small class="text-muted" style="font-size: 0.78rem;">Soporte a la Toma de Decisiones · Ing. Jesús Bautista</small>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span id="badge-cnn" class="badge bg-warning text-dark py-2 px-3 rounded-pill fw-semibold" style="font-size:0.75rem;">
+            <i class="bi bi-hourglass-split"></i> Cargando CNN...
+          </span>
+          <span id="badge-detector" class="badge bg-warning text-dark py-2 px-3 rounded-pill fw-semibold" style="font-size:0.75rem;">
+            <i class="bi bi-hourglass-split"></i> Cargando Detector...
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <main class="container mb-5">
+      <div class="row g-4 justify-content-center">
+        
+        <!-- Columna Izquierda: Visor de Video / Canvas -->
+        <div class="col-12 col-lg-7">
+          <div class="glass-card p-3 p-md-4 text-center">
+            
+            <!-- Selector de Modos -->
+            <div class="mode-toggle mb-3">
+              <input type="radio" class="btn-check" name="modoOperacion" id="modoConteo" autocomplete="off" checked onchange="cambiarModo('conteo')">
+              <label class="btn" for="modoConteo">
+                <i class="bi bi-grid-3x3"></i> Modo 2: Detector y Conteo
+              </label>
+
+              <input type="radio" class="btn-check" name="modoOperacion" id="modoClasico" autocomplete="off" onchange="cambiarModo('clasico')">
+              <label class="btn" for="modoClasico">
+                <i class="bi bi-bullseye"></i> Modo 1: Clasificador CNN
+              </label>
+            </div>
+
+            <!-- Viewport con Canvas -->
+            <div class="viewport-wrapper mb-3">
+              <video id="video" playsinline autoplay muted style="display:none;"></video>
+              <canvas id="canvas" width="480" height="480"></canvas>
+              <canvas id="otrocanvas" width="100" height="100" style="display:none;"></canvas>
+
+              <div class="hud-overlay">
+                <div class="hud-corner hud-tl"></div>
+                <div class="hud-corner hud-tr"></div>
+                <div class="hud-corner hud-bl"></div>
+                <div class="hud-corner hud-br"></div>
+
+                <div class="hud-live-tag">
+                  <span class="pulse-dot"></span>
+                  <span id="hud-source-text">EN ESPERA</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Barra de Herramientas de Entrada -->
+            <div class="d-flex flex-wrap justify-content-center gap-2 mb-2">
+              <button class="btn btn-action btn-primary" id="btn-camara-local" onclick="activarCamaraLocal()">
+                <i class="bi bi-camera-video"></i> Cámara Local
+              </button>
+              
+              <button class="btn btn-action btn-outline-info text-light" onclick="abrirModalCelular()">
+                <i class="bi bi-phone"></i> Conectar Celular
+              </button>
+              
+              <button class="btn btn-action btn-outline-secondary text-light" onclick="document.getElementById('subir-foto').click()">
+                <i class="bi bi-upload"></i> Subir Foto
+              </button>
+              <input type="file" id="subir-foto" accept="image/*" style="display: none;" onchange="cargarFoto(event)">
+            </div>
+
+            <div id="alerta-fuente" class="alert alert-dark text-info border-info border-opacity-25 py-2 px-3 small mt-3 mb-0 d-none" role="alert"></div>
+
+          </div>
+        </div>
+
+        <!-- Columna Derecha: Panel de Estadísticas y Resultados -->
+        <div class="col-12 col-lg-5">
+          <div class="d-flex flex-column gap-3">
+            
+            <!-- Tarjeta Principal de Resultado -->
+            <div class="glass-card p-4 text-center">
+              <span class="text-uppercase fw-bold text-muted small tracking-wide">Resultado en Tiempo Real</span>
+              
+              <div id="resultado" class="hero-result my-3 d-flex align-items-center justify-content-center">
+                <span class="text-muted fs-4">Iniciando...</span>
+              </div>
+              
+              <div id="confianza-texto" class="text-muted small">
+                Apunta con la cámara o selecciona una muestra de prueba
+              </div>
+            </div>
+
+            <!-- Tarjeta de Contadores y Métricas -->
+            <div class="glass-card p-3 p-md-4">
+              <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                <i class="bi bi-bar-chart-fill text-primary"></i> Métricas del Conteo
+              </h6>
+
+              <div class="d-flex gap-2 mb-3">
+                <div class="stat-badge">
+                  <span id="stat-gatos" class="stat-value text-info">0</span>
+                  <span class="stat-label">Gatos</span>
+                </div>
+                <div class="stat-badge">
+                  <span id="stat-perros" class="stat-value text-success">0</span>
+                  <span class="stat-label">Perros</span>
+                </div>
+                <div class="stat-badge">
+                  <span id="stat-total" class="stat-value text-white">0</span>
+                  <span class="stat-label">Total</span>
+                </div>
+              </div>
+
+              <!-- Lista Detallada de Detecciones -->
+              <div class="border-top border-secondary border-opacity-25 pt-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="small fw-bold text-muted text-uppercase">Objetos Identificados:</span>
+                  <span id="fps-counter" class="small font-monospace text-muted">0 FPS</span>
+                </div>
+                
+                <div id="lista-detecciones" class="d-flex flex-column gap-2" style="max-height: 180px; overflow-y: auto;">
+                  <div class="text-muted small text-center py-2">Sin detecciones activas</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Ficha Técnica e Institucional -->
+            <div class="glass-card p-3 p-md-4">
+              <div class="d-flex align-items-center gap-3 mb-2">
+                <img src="logo_uagrm_ficct.png" alt="UAGRM FICCT" width="44" height="56" class="flex-shrink-0">
+                <div>
+                  <h6 class="fw-bold mb-0 text-white">UAGRM · FICCT</h6>
+                  <div class="text-primary small fw-semibold">Soporte a la Toma de Decisiones</div>
+                  <div class="text-muted" style="font-size: 0.76rem;">Facultad de Ciencias de la Computación y Telecomunicaciones</div>
+                </div>
+              </div>
+              
+              <div class="border-top border-secondary border-opacity-25 pt-2 mt-2">
+                <div class="d-flex align-items-center gap-2 text-warning small fw-bold mb-1">
+                  <i class="bi bi-mortarboard-fill"></i> Docente: Ing. Jesús Bautista
+                </div>
+                <p class="text-muted mb-0" style="font-size: 0.77rem; line-height: 1.45;">
+                  Propuesta académica para el análisis de información y visión por computadora. Agradecimiento al <strong>Ing. Jesús Bautista</strong> por compartir su conocimiento, proponernos este reto y motivarnos a ponernos a prueba.
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Footer Institucional -->
+    <footer class="py-4 border-top border-secondary border-opacity-25 text-center text-muted small mt-5">
+      <div class="container">
+        <div class="d-flex justify-content-center align-items-center gap-3 mb-2 flex-wrap">
+          <img src="logo_uagrm_ficct.png" alt="FICCT UAGRM" width="34" height="42">
+          <div class="text-start">
+            <div class="fw-bold text-light">Universidad Autónoma Gabriel René Moreno</div>
+            <div class="text-secondary" style="font-size: 0.78rem;">Facultad de Ciencias de la Computación y Telecomunicaciones (FICCT)</div>
+          </div>
+        </div>
+        <p class="mb-1 text-secondary">
+          Materia: <strong>Soporte a la Toma de Decisiones</strong> &nbsp;·&nbsp; Docente: <strong>Ing. Jesús Bautista</strong>
+        </p>
+        <p class="mb-0 text-muted" style="font-size: 0.75rem;">
+          Proyecto desarrollado como desafío práctico de análisis de información, redes neuronales convolucionales y visión artificial.
+        </p>
+      </div>
+    </footer>
+
+    <!-- Modal para Conectar Celular con Código QR -->
+    <div class="modal fade" id="modalCelular" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center p-4">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title fw-bold w-100">Vincular Celular como Cámara</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body py-4">
+            <p class="text-muted small mb-3">
+              Escanea este código con la cámara de tu celular. El teléfono transmitirá su video en vivo hacia esta laptop vía WebRTC.
+            </p>
+            
+            <div id="qr-container" class="mb-3"></div>
+
+            <div class="input-group input-group-sm mb-2">
+              <input type="text" id="link-remoto" class="form-control bg-dark text-light border-secondary font-monospace" readonly>
+              <button class="btn btn-outline-primary" onclick="copiarLinkRemoto()"><i class="bi bi-clipboard"></i> Copiar</button>
+            </div>
+            
+            <div id="estado-conexion-peer" class="badge bg-secondary py-2 px-3 rounded-pill mt-2">
+              <i class="bi bi-broadcast"></i> Esperando conexión del celular...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts Esenciales -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+    <script type="text/javascript">
+      const tamano = 480;
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      const otrocanvas = document.getElementById("otrocanvas");
+      const ctx = canvas.getContext("2d");
+
+      let currentStream = null;
+      let facingMode = "user";
+      let usandoCamara = false;
+      let imagenFuente = null;
+      let modoActual = 'conteo';
+      let procesandoCuadro = false;
+
+      // Modelos
+      let modeloCNN = null;
+      let detector = null;
+
+      // WebRTC PeerJS
+      let peer = null;
+      let peerIdLocal = null;
+      let llamadaActiva = null;
+
+      // FPS tracking
+      let lastFrameTime = performance.now();
+      let frameCount = 0;
+      let fpsDisplay = document.getElementById("fps-counter");
+
+      // Inicializar Canvas oscuro
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(0, 0, tamano, tamano);
+      ctx.fillStyle = "#64748b";
+      ctx.font = "600 16px 'Plus Jakarta Sans'";
+      ctx.textAlign = "center";
+      ctx.fillText("Iniciando modelos de IA...", tamano/2, tamano/2);
+
+      // --- DETECCIÓN DE MODO REMOTO (SI ES EL CELULAR QUE ESCANEÓ EL QR) ---
+      const urlParams = new URLSearchParams(window.location.search);
+      const remotePeerId = urlParams.get('remoto');
+
+      if (remotePeerId) {
+        // Ejecutar en modo celular transmisor
+        iniciarTransmisorCelular(remotePeerId);
+      } else {
+        // Ejecutar en modo Monitor / Aplicación principal
+        iniciarAppPrincipal();
+      }
+
+      // --- MODO MONITOR (LAPTOP) ---
+      async function iniciarAppPrincipal() {
+        // Cargar Modelo CNN de clase
+        try {
+          modeloCNN = await tf.loadLayersModel("model.json");
+          const b = document.getElementById("badge-cnn");
+          b.className = "badge bg-success text-white py-2 px-3 rounded-pill fw-semibold";
+          b.innerHTML = '<i class="bi bi-check-circle-fill"></i> CNN Lista';
+        } catch(e) {
+          console.error("Error CNN:", e);
+          const b = document.getElementById("badge-cnn");
+          b.className = "badge bg-danger text-white py-2 px-3 rounded-pill fw-semibold";
+          b.innerHTML = '<i class="bi bi-x-circle-fill"></i> Error CNN';
+        }
+
+        // Cargar Detector Multi-objeto
+        try {
+          detector = await cocoSsd.load();
+          const b = document.getElementById("badge-detector");
+          b.className = "badge bg-success text-white py-2 px-3 rounded-pill fw-semibold";
+          b.innerHTML = '<i class="bi bi-check-circle-fill"></i> Detector Listo';
+          // Estado listo
+          ctx.fillStyle = "#0f172a";
+          ctx.fillRect(0, 0, tamano, tamano);
+          ctx.fillStyle = "#94a3b8";
+          ctx.font = "600 15px 'Plus Jakarta Sans'";
+          ctx.textAlign = "center";
+          ctx.fillText("Modelos listos. Activa la cámara o sube una foto.", tamano/2, tamano/2);
+        } catch(e) {
+          console.error("Error Detector:", e);
+          const b = document.getElementById("badge-detector");
+          b.className = "badge bg-danger text-white py-2 px-3 rounded-pill fw-semibold";
+          b.innerHTML = '<i class="bi bi-x-circle-fill"></i> Error Detector';
+        }
+
+        // Inicializar PeerJS en la laptop para recibir llamadas del celular
+        inicializarPeerLaptop();
+      }
+
+      function inicializarPeerLaptop() {
+        peerIdLocal = 'laptop-' + Math.random().toString(36).substring(2, 8);
+        peer = new Peer(peerIdLocal);
+
+        peer.on('open', (id) => {
+          console.log("Laptop Peer ID:", id);
+        });
+
+        // Cuando el celular llama a la laptop con su stream de video
+        peer.on('call', (call) => {
+          console.log("Llamada entrante desde celular!");
+          llamadaActiva = call;
+          call.answer(); // Responder llamada
+
+          call.on('stream', (remoteStream) => {
+            console.log("Recibiendo video del celular...");
+            detenerStreamsLocales();
+            currentStream = remoteStream;
+            video.srcObject = remoteStream;
+            video.onloadedmetadata = () => video.play();
+            video.play().catch(e => console.log(e));
+            usandoCamara = true;
+            imagenFuente = null;
+
+            // Actualizar interfaz
+            document.getElementById("hud-source-text").innerText = "CELULAR EN VIVO";
+            const alerta = document.getElementById("alerta-fuente");
+            alerta.className = "alert alert-success py-2 px-3 small mt-3 mb-0";
+            alerta.innerHTML = '<i class="bi bi-phone"></i> <strong>Celular Conectado:</strong> Recibiendo video inalámbrico en tiempo real.';
+            alerta.classList.remove("d-none");
+
+            // Cerrar modal si estaba abierto
+            const modalEl = document.getElementById('modalCelular');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+
+            bucleCamara();
+          });
+        });
+
+        peer.on('error', (err) => {
+          console.warn("PeerJS error:", err);
+        });
+      }
+
+      function abrirModalCelular() {
+        const modal = new bootstrap.Modal(document.getElementById('modalCelular'));
+        const qrContainer = document.getElementById("qr-container");
+        qrContainer.innerHTML = "";
+
+        const baseUrl = window.location.origin + window.location.pathname;
+        const targetUrl = baseUrl + '?remoto=' + peerIdLocal;
+
+        document.getElementById("link-remoto").value = targetUrl;
+
+        new QRCode(qrContainer, {
+          text: targetUrl,
+          width: 190,
+          height: 190,
+          colorDark: "#0f172a",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        modal.show();
+      }
+
+      function copiarLinkRemoto() {
+        const input = document.getElementById("link-remoto");
+        input.select();
+        document.execCommand("copy");
+        alert("Enlace copiado al portapapeles!");
+      }
+
+      // --- MODO TRANSMISOR EN CELULAR ---
+      let streamTransmisor = null;
+      let facingTransmisor = "environment";
+
+      async function iniciarTransmisorCelular(targetPeerId) {
+        document.getElementById("pantalla-transmisor").style.display = "flex";
+        document.querySelector("main").style.display = "none";
+        document.querySelector("header").style.display = "none";
+
+        const videoT = document.getElementById("video-transmisor");
+
+        try {
+          streamTransmisor = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: facingTransmisor, width: { ideal: 640 }, height: { ideal: 640 } }
+          });
+          videoT.srcObject = streamTransmisor;
+          videoT.play();
+
+          // Conectar con la laptop
+          const celPeer = new Peer();
+          celPeer.on('open', () => {
+            console.log("Celular conectado como Peer, llamando a laptop:", targetPeerId);
+            const call = celPeer.call(targetPeerId, streamTransmisor);
+            call.on('close', () => alert("Conexión finalizada"));
+          });
+
+        } catch(err) {
+          alert("Error al abrir cámara en el celular: " + err.message);
+        }
+      }
+
+      async function cambiarCamaraTransmisor() {
+        if (streamTransmisor) {
+          streamTransmisor.getTracks().forEach(t => t.stop());
+        }
+        facingTransmisor = (facingTransmisor === "environment") ? "user" : "environment";
+        const videoT = document.getElementById("video-transmisor");
+        streamTransmisor = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: facingTransmisor, width: { ideal: 640 } }
+        });
+        videoT.srcObject = streamTransmisor;
+        videoT.play();
+      }
+
+      function desconectarTransmisor() {
+        if (streamTransmisor) {
+          streamTransmisor.getTracks().forEach(t => t.stop());
+        }
+        window.location.href = window.location.origin + window.location.pathname;
+      }
+
+      // --- CONTROL DE CÁMARA LOCAL ---
+      function activarCamaraLocal() {
+        detenerStreamsLocales();
+        const opciones = {
+          audio: false,
+          video: { facingMode: facingMode, width: { ideal: tamano }, height: { ideal: tamano } }
+        };
+
+        const alerta = document.getElementById("alerta-fuente");
+
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          navigator.mediaDevices.getUserMedia(opciones)
+            .then(stream => {
+              currentStream = stream;
+              video.srcObject = currentStream;
+              video.onloadedmetadata = () => video.play();
+              video.play().catch(e => console.log(e));
+              usandoCamara = true;
+              imagenFuente = null;
+              document.getElementById("hud-source-text").innerText = "CÁMARA LOCAL";
+              alerta.className = "alert alert-success py-2 px-3 small mt-3 mb-0";
+              alerta.innerHTML = '<i class="bi bi-camera-video"></i> <strong>Cámara Local Activa:</strong> Analizando en tiempo real.';
+              alerta.classList.remove("d-none");
+              bucleCamara();
+            })
+            .catch(err => {
+              console.warn("Cámara no disponible:", err);
+              usandoCamara = false;
+              alerta.className = "alert alert-warning py-2 px-3 small mt-3 mb-0";
+              alerta.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Cámara local no detectada. Usa <strong>Conectar Celular</strong> o <strong>Subir Foto</strong>.';
+              alerta.classList.remove("d-none");
+            });
+        }
+      }
+
+      function detenerStreamsLocales() {
+        if (currentStream) {
+          currentStream.getTracks().forEach(t => t.stop());
+          currentStream = null;
+        }
+        usandoCamara = false;
+      }
+
+      function cambiarModo(nuevoModo) {
+        modoActual = nuevoModo;
+        ejecutarAnalisis();
+      }
+
+      async function bucleCamara() {
+        if (!usandoCamara) return;
+
+        if (video.videoWidth > 0 && video.readyState >= 2) {
+          ctx.drawImage(video, 0, 0, tamano, tamano);
+          await ejecutarAnalisis();
+        }
+
+        // Calcular FPS
+        frameCount++;
+        const now = performance.now();
+        if (now - lastFrameTime >= 1000) {
+          fpsDisplay.innerText = frameCount + " FPS";
+          frameCount = 0;
+          lastFrameTime = now;
+        }
+
+        requestAnimationFrame(bucleCamara);
+      }
+
+      async function ejecutarAnalisis() {
+        if (procesandoCuadro) return;
+        procesandoCuadro = true;
+
+        try {
+          if (modoActual === 'clasico') {
+            await inferirCNNClasica();
+          } else {
+            await detectarYContar();
+          }
+        } catch(e) {
+          console.error("Error análisis:", e);
+        } finally {
+          procesandoCuadro = false;
+        }
+      }
+
+      // --- MODO 1: CLASIFICADOR CNN ---
+      async function inferirCNNClasica() {
+        if (!modeloCNN) return;
+
+        resample_single(canvas, 100, 100, otrocanvas);
+        const ctx2 = otrocanvas.getContext("2d");
+        const imgData = ctx2.getImageData(0, 0, 100, 100);
+
+        const arr = [];
+        let arr100 = [];
+
+        for (let p = 0; p < imgData.data.length; p += 4) {
+          const gris = (imgData.data[p] + imgData.data[p+1] + imgData.data[p+2]) / (3 * 255);
+          arr100.push([gris]);
+          if (arr100.length === 100) {
+            arr.push(arr100);
+            arr100 = [];
+          }
+        }
+
+        tf.tidy(() => {
+          const tensor = tf.tensor4d([arr]);
+          const pred = modeloCNN.predict(tensor).dataSync()[0];
+
+          const resElem = document.getElementById("resultado");
+          const confElem = document.getElementById("confianza-texto");
+          const listaElem = document.getElementById("lista-detecciones");
+
+          const statGatos = document.getElementById("stat-gatos");
+          const statPerros = document.getElementById("stat-perros");
+          const statTotal = document.getElementById("stat-total");
+
+          if (pred <= 0.5) {
+            const pct = Math.round((1 - pred) * 100);
+            resElem.innerHTML = `<span style="color:var(--accent-cat);"><i class="bi bi-star-fill me-2 fs-3"></i>🐱 Gato (${pct}%)</span>`;
+            confElem.innerText = `Certeza Gato: ${pct}% · Score sigmoide: ${pred.toFixed(4)}`;
+            statGatos.innerText = "1";
+            statPerros.innerText = "0";
+            statTotal.innerText = "1";
+            listaElem.innerHTML = `<div class="d-flex justify-content-between p-2 rounded bg-dark border border-secondary border-opacity-25 small">
+              <span>🐱 Gato (Marco Completo)</span>
+              <span class="text-info font-monospace">${pct}%</span>
+            </div>`;
+          } else {
+            const pct = Math.round(pred * 100);
+            resElem.innerHTML = `<span style="color:var(--accent-dog);"><i class="bi bi-star-fill me-2 fs-3"></i>🐶 Perro (${pct}%)</span>`;
+            confElem.innerText = `Certeza Perro: ${pct}% · Score sigmoide: ${pred.toFixed(4)}`;
+            statGatos.innerText = "0";
+            statPerros.innerText = "1";
+            statTotal.innerText = "1";
+            listaElem.innerHTML = `<div class="d-flex justify-content-between p-2 rounded bg-dark border border-secondary border-opacity-25 small">
+              <span>🐶 Perro (Marco Completo)</span>
+              <span class="text-success font-monospace">${pct}%</span>
+            </div>`;
+          }
+        });
+      }
+
+      // --- MODO 2: DETECTOR MULTI-OBJETO Y CONTEO ---
+      async function detectarYContar() {
+        if (!detector) return;
+
+        if (!usandoCamara && imagenFuente) {
+          ctx.drawImage(imagenFuente, 0, 0, tamano, tamano);
+        }
+
+        const predicciones = await detector.detect(canvas);
+
+        let gatos = 0;
+        let perros = 0;
+        let sumaScoreGatos = 0;
+        let sumaScorePerros = 0;
+        let detallesHTML = "";
+
+        ctx.lineWidth = 3;
+        ctx.font = "bold 13px 'Plus Jakarta Sans', sans-serif";
+        ctx.textBaseline = "top";
+
+        predicciones.forEach((item, index) => {
+          if (item.class === 'cat' || item.class === 'dog') {
+            const [x, y, w, h] = item.bbox;
+            const scorePct = Math.round(item.score * 100);
+            const esGato = (item.class === 'cat');
+
+            if (esGato) {
+              gatos++;
+              sumaScoreGatos += scorePct;
+              ctx.strokeStyle = "#38bdf8";
+              ctx.fillStyle = "rgba(14, 165, 233, 0.9)";
+            } else {
+              perros++;
+              sumaScorePerros += scorePct;
+              ctx.strokeStyle = "#34d399";
+              ctx.fillStyle = "rgba(16, 185, 129, 0.9)";
+            }
+
+            // Recuadro con esquinas marcadas
+            ctx.strokeRect(x, y, w, h);
+
+            // Etiqueta flotante con estilo glass
+            const tag = (esGato ? "🐱 Gato " : "🐶 Perro ") + scorePct + "%";
+            const tagW = ctx.measureText(tag).width + 12;
+            const tagH = 22;
+            const tagY = Math.max(0, y - tagH);
+
+            ctx.fillRect(x, tagY, tagW, tagH);
+            ctx.fillStyle = "#ffffff";
+            ctx.fillText(tag, x + 6, tagY + 4);
+
+            detallesHTML += `
+              <div class="d-flex justify-content-between align-items-center p-2 rounded bg-dark border border-secondary border-opacity-25 small">
+                <span>${esGato ? '🐱 Gato #' + gatos : '🐶 Perro #' + perros}</span>
+                <span class="${esGato ? 'text-info' : 'text-success'} font-monospace fw-bold">${scorePct}%</span>
+              </div>
+            `;
+          }
+        });
+
+        // Actualizar Estadísticas
+        document.getElementById("stat-gatos").innerText = gatos;
+        document.getElementById("stat-perros").innerText = perros;
+        document.getElementById("stat-total").innerText = (gatos + perros);
+
+        const resElem = document.getElementById("resultado");
+        const confElem = document.getElementById("confianza-texto");
+        const listaElem = document.getElementById("lista-detecciones");
+
+        if (gatos === 0 && perros === 0) {
+          resElem.innerHTML = `<span class="text-muted fs-4">Sin animales</span>`;
+          confElem.innerText = "Apunta a perros o gatos para detectarlos";
+          listaElem.innerHTML = `<div class="text-muted small text-center py-2">Sin detecciones en escena</div>`;
+        } else {
+          const textos = [];
+          if (gatos > 0) {
+            const avg = Math.round(sumaScoreGatos / gatos);
+            textos.push(`<span style="color:var(--accent-cat);">🐱 ${gatos} ${gatos === 1 ? 'Gato' : 'Gatos'} (${avg}%)</span>`);
+          }
+          if (perros > 0) {
+            const avg = Math.round(sumaScorePerros / perros);
+            textos.push(`<span style="color:var(--accent-dog);">🐶 ${perros} ${perros === 1 ? 'Perro' : 'Perros'} (${avg}%)</span>`);
+          }
+
+          resElem.innerHTML = textos.join(" · ");
+          confElem.innerText = `Total localizado: ${gatos + perros} unidades con recuadros espaciales`;
+          listaElem.innerHTML = detallesHTML;
+        }
+      }
+
+      // --- SUBIR FOTO Y DEMOS ---
+      function cargarFoto(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        detenerStreamsLocales();
+        document.getElementById("hud-source-text").innerText = "IMAGEN LOCAL";
+
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            imagenFuente = img;
+            ctx.drawImage(img, 0, 0, tamano, tamano);
+            ejecutarAnalisis();
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+
+
+      // Filtro Hermite para redimensionado suave a 100x100
+      function resample_single(canvas, width, height, resize_canvas) {
+        const width_source = canvas.width;
+        const height_source = canvas.height;
+        width = Math.round(width);
+        height = Math.round(height);
+
+        const ratio_w = width_source / width;
+        const ratio_h = height_source / height;
+        const ratio_w_half = Math.ceil(ratio_w / 2);
+        const ratio_h_half = Math.ceil(ratio_h / 2);
+
+        const ctx = canvas.getContext("2d");
+        const ctx2 = resize_canvas.getContext("2d");
+        const img = ctx.getImageData(0, 0, width_source, height_source);
+        const img2 = ctx2.createImageData(width, height);
+        const data = img.data;
+        const data2 = img2.data;
+
+        for (let j = 0; j < height; j++) {
+          for (let i = 0; i < width; i++) {
+            const x2 = (i + j * width) * 4;
+            let weight = 0, weights = 0, weights_alpha = 0;
+            let gx_r = 0, gx_g = 0, gx_b = 0, gx_a = 0;
+            const center_y = (j + 0.5) * ratio_h;
+            const yy_start = Math.floor(j * ratio_h);
+            const yy_stop = Math.ceil((j + 1) * ratio_h);
+
+            for (let yy = yy_start; yy < yy_stop; yy++) {
+              const dy = Math.abs(center_y - (yy + 0.5)) / ratio_h_half;
+              const center_x = (i + 0.5) * ratio_w;
+              const w0 = dy * dy;
+              const xx_start = Math.floor(i * ratio_w);
+              const xx_stop = Math.ceil((i + 1) * ratio_w);
+
+              for (let xx = xx_start; xx < xx_stop; xx++) {
+                const dx = Math.abs(center_x - (xx + 0.5)) / ratio_h_half;
+                const w = Math.sqrt(w0 + dx * dx);
+                if (w >= 1) continue;
+                weight = 2 * w * w * w - 3 * w * w + 1;
+                const pos_x = 4 * (xx + yy * width_source);
+                gx_a += weight * data[pos_x + 3];
+                weights_alpha += weight;
+                if (data[pos_x + 3] < 255) weight = weight * data[pos_x + 3] / 250;
+                gx_r += weight * data[pos_x];
+                gx_g += weight * data[pos_x + 1];
+                gx_b += weight * data[pos_x + 2];
+                weights += weight;
+              }
+            }
+            data2[x2] = gx_r / weights;
+            data2[x2 + 1] = gx_g / weights;
+            data2[x2 + 2] = gx_b / weights;
+            data2[x2 + 3] = gx_a / weights_alpha;
+          }
+        }
+        ctx2.putImageData(img2, 0, 0);
+      }
+    </script>
+  </body>
+</html>
