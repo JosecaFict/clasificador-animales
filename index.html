@@ -348,7 +348,7 @@
                   <i class="bi bi-broadcast text-info"></i> <strong class="text-white">¿Transmitir a tu Laptop?</strong>
                   <div class="text-muted" style="font-size:0.75rem;">Usa este celular como cámara remota en vivo</div>
                 </div>
-                <button class="btn btn-sm btn-primary fw-bold px-3" onclick="abrirModalCelular()">Vincular</button>
+                <button class="btn btn-sm btn-primary fw-bold px-3" onclick="abrirModalVincularMobile()">Vincular</button>
               </div>
             </div>
 
@@ -548,6 +548,32 @@
       </div>
     </div>
 
+    <!-- Modal Simple para Celular: Ingresar Código de Laptop -->
+    <div class="modal fade" id="modalVincularMobile" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center p-4">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title fw-bold w-100"><i class="bi bi-broadcast text-primary me-2"></i>Transmitir a Laptop</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body py-3">
+            <p class="text-muted small mb-3">
+              Escribe el código que aparece en la pantalla de tu laptop:
+            </p>
+            <form onsubmit="event.preventDefault(); conectarPorCodigoMobile();">
+              <div class="input-group input-group-lg mb-3">
+                <input type="text" id="input-codigo-mobile" class="form-control text-center font-monospace fw-bold text-uppercase fs-2 bg-dark text-warning border-primary" placeholder="EJ: S9FZRK" maxlength="12" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+                <button class="btn btn-primary px-4 fw-bold" type="submit"><i class="bi bi-arrow-right-circle-fill fs-4"></i></button>
+              </div>
+            </form>
+            <p class="text-muted mb-0" style="font-size:0.75rem;">
+              Al conectar, este teléfono transmitirá su cámara a la laptop en tiempo real.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Scripts Esenciales -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -607,6 +633,9 @@
 
       // --- MODO MONITOR (LAPTOP) ---
       async function iniciarAppPrincipal() {
+        // Inicializar PeerJS en la laptop de inmediato para que el ID/código esté listo sin esperar modelos
+        inicializarPeerLaptop();
+
         // Cargar Modelo CNN de clase
         try {
           modeloCNN = await tf.loadLayersModel("model.json");
@@ -639,12 +668,10 @@
           b.className = "badge bg-danger text-white py-2 px-3 rounded-pill fw-semibold";
           b.innerHTML = '<i class="bi bi-x-circle-fill"></i> Error Detector';
         }
-
-        // Inicializar PeerJS en la laptop para recibir llamadas del celular
-        inicializarPeerLaptop();
       }
 
       function inicializarPeerLaptop() {
+        if (peerIdLocal && peer) return;
         peerIdLocal = 'laptop-' + Math.random().toString(36).substring(2, 8);
         peer = new Peer(peerIdLocal);
 
@@ -733,16 +760,45 @@
         }
       }
 
-      function conectarPorCodigoManual() {
-        let codigo = document.getElementById("input-codigo-laptop").value.trim().toLowerCase();
+      function abrirModalVincularMobile() {
+        const modal = new bootstrap.Modal(document.getElementById('modalVincularMobile'));
+        modal.show();
+        setTimeout(() => {
+          const input = document.getElementById('input-codigo-mobile');
+          if (input) input.focus();
+        }, 300);
+      }
+
+      function conectarPorCodigoMobile() {
+        let inputEl = document.getElementById("input-codigo-mobile");
+        let codigo = inputEl ? inputEl.value.trim().toLowerCase() : "";
         if (!codigo) {
-          alert("Por favor escribe el código de la laptop (ej: " + (peerIdLocal ? peerIdLocal.replace('laptop-','') : 'abc123') + ").");
+          alert("Por favor ingresa el código de tu laptop (ej: S9FZRK).");
           return;
         }
         if (!codigo.startsWith("laptop-")) {
           codigo = "laptop-" + codigo;
         }
-        window.location.href = window.location.origin + window.location.pathname + "?remoto=" + encodeURIComponent(codigo);
+        try {
+          history.pushState({}, '', '?remoto=' + encodeURIComponent(codigo));
+        } catch(e) {}
+        prepararTransmisorCelular(codigo);
+      }
+
+      function conectarPorCodigoManual() {
+        let inputEl = document.getElementById("input-codigo-laptop");
+        let codigo = inputEl ? inputEl.value.trim().toLowerCase() : "";
+        if (!codigo) {
+          alert("Por favor escribe el código de la laptop.");
+          return;
+        }
+        if (!codigo.startsWith("laptop-")) {
+          codigo = "laptop-" + codigo;
+        }
+        try {
+          history.pushState({}, '', '?remoto=' + encodeURIComponent(codigo));
+        } catch(e) {}
+        prepararTransmisorCelular(codigo);
       }
 
       // --- MODO TRANSMISOR EN CELULAR ---
@@ -750,9 +806,23 @@
 
       function prepararTransmisorCelular(targetPeerId) {
         peerRemotoObjetivo = targetPeerId;
+
+        // Limpiar cualquier modal o backdrop abierto
+        document.querySelectorAll('.modal').forEach(m => {
+          try {
+            const inst = bootstrap.Modal.getInstance(m);
+            if (inst) inst.hide();
+          } catch(e) {}
+        });
+        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+        document.body.classList.remove('modal-open');
+
+        // Mostrar vista limpia de transmisión
         document.getElementById("pantalla-transmisor").style.display = "flex";
-        document.querySelector("main").style.display = "none";
-        document.querySelector("header").style.display = "none";
+        const main = document.querySelector("main");
+        if (main) main.style.display = "none";
+        const header = document.querySelector("header");
+        if (header) header.style.display = "none";
         const footer = document.querySelector("footer");
         if (footer) footer.style.display = "none";
       }
