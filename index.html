@@ -917,38 +917,58 @@
       }
 
       // --- CONTROL DE CÁMARA LOCAL ---
-      function activarCamaraLocal() {
+      async function activarCamaraLocal() {
         detenerStreamsLocales();
-        const opciones = {
-          audio: false,
-          video: { facingMode: facingMode, width: { ideal: tamano }, height: { ideal: tamano } }
-        };
-
         const alerta = document.getElementById("alerta-fuente");
+        alerta.classList.add("d-none");
 
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          navigator.mediaDevices.getUserMedia(opciones)
-            .then(stream => {
-              currentStream = stream;
-              video.srcObject = currentStream;
-              video.onloadedmetadata = () => video.play();
-              video.play().catch(e => console.log(e));
-              usandoCamara = true;
-              imagenFuente = null;
-              document.getElementById("hud-source-text").innerText = "CÁMARA LOCAL";
-              alerta.className = "alert alert-success py-2 px-3 small mt-3 mb-0";
-              alerta.innerHTML = '<i class="bi bi-camera-video"></i> <strong>Cámara Local Activa:</strong> Analizando en tiempo real.';
-              alerta.classList.remove("d-none");
-              bucleCamara();
-            })
-            .catch(err => {
-              console.warn("Cámara no disponible:", err);
-              usandoCamara = false;
-              alerta.className = "alert alert-warning py-2 px-3 small mt-3 mb-0";
-              alerta.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Cámara local no detectada. Usa <strong>Conectar Celular</strong> o <strong>Subir Foto</strong>.';
-              alerta.classList.remove("d-none");
-            });
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          alerta.className = "alert alert-danger py-2 px-3 small mt-3 mb-0";
+          alerta.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Tu navegador no soporta acceso a la cámara.';
+          alerta.classList.remove("d-none");
+          return;
         }
+
+        let stream = null;
+        try {
+          // Intentar con cámara trasera o adecuada
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: { ideal: "environment" }, width: { ideal: tamano } }
+          });
+        } catch(e1) {
+          console.warn("Fallo cámara ideal, probando genérica:", e1);
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+          } catch(e2) {
+            console.error("Error definitivo getUserMedia:", e2);
+            usandoCamara = false;
+            alerta.className = "alert alert-warning py-3 px-3 small mt-3 mb-0 text-start shadow";
+            alerta.innerHTML = '<div class="d-flex align-items-center gap-2 mb-2 text-danger fw-bold fs-6">' +
+              '<i class="bi bi-shield-lock-fill"></i> Permiso de Cámara bloqueado en Safari</div>' +
+              '<p class="mb-2 text-light" style="font-size:0.8rem;">Safari ha guardado "No permitir" para esta página. Desbloquéalo en 5 segundos:</p>' +
+              '<ol class="mb-2 ps-3 text-light" style="font-size:0.78rem; line-height: 1.5;">' +
+                '<li>Toca el icono a la izquierda del enlace en la barra superior (<strong>aA</strong> o <strong>✨</strong>).</li>' +
+                '<li>Toca <strong>Configuración del sitio web</strong>.</li>' +
+                '<li>En <strong>Cámara</strong>, cambia de "Denegar" a <strong>"Permitir"</strong>.</li>' +
+                '<li>Recarga la página y vuelve a tocar <strong>Cámara Local</strong>.</li>' +
+              '</ol>';
+            alerta.classList.remove("d-none");
+            return;
+          }
+        }
+
+        currentStream = stream;
+        video.srcObject = currentStream;
+        video.onloadedmetadata = () => video.play();
+        video.play().catch(e => console.log(e));
+        usandoCamara = true;
+        imagenFuente = null;
+        document.getElementById("hud-source-text").innerText = "CÁMARA LOCAL";
+        alerta.className = "alert alert-success py-2 px-3 small mt-3 mb-0";
+        alerta.innerHTML = '<i class="bi bi-camera-video-fill"></i> <strong>Cámara Local Activa:</strong> Analizando en tiempo real.';
+        alerta.classList.remove("d-none");
+        bucleCamara();
       }
 
       function detenerStreamsLocales() {
